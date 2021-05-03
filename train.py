@@ -73,16 +73,6 @@ print(f'Length of vocab: {len(vocab)}')
 print(f'Padded train set length {len(train_x[0])}')
 print(f'Padded test set length {len(test_x[0])}')
 
-def convert_data_to_loader(data, batch_size):
-    ds = TensorDataset(torch.tensor(data, dtype=torch.long))
-    sampler = RandomSampler(ds)
-    return DataLoader(ds, sampler=sampler, batch_size=batch_size)
-
-def sentence_batch_generator(data, batch_size):
-    n_batch = len(data) / batch_size
-    batch_count = 0
-    np.random.shuffle(data)
-
     while True:
         if batch_count == n_batch:
             np.random.shuffle(data)
@@ -121,12 +111,6 @@ optimizer = AdamW(params=model.parameters() ,lr=0.001, betas=[0.9, 0.999], eps=1
 ###############################################################################################################################
 ## Training
 #
-
-# sen_gen = sentence_batch_generator(np.asarray(train_x), args.batch_size)
-# neg_gen = negative_batch_generator(np.asarray(train_x), args.batch_size, args.neg_size)
-
-# sen = next(sen_gen)
-# neg = next(neg_gen)
 
 train_dataloader = convert_data_to_loader(train_x, args.batch_size)
 

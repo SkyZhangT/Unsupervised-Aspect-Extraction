@@ -1,8 +1,8 @@
 # Unsupervised Aspect Extraction
 
-A up-to-date pytorch version of ACL2017 paper ‘‘An unsupervised neural attention model for aspect extraction’’. [(pdf)](http://aclweb.org/anthology/P/P17/P17-1036.pdf)
+An up-to-date pytorch version model of ACL2017 paper ‘‘An unsupervised neural attention model for aspect extraction’’. [(pdf)](http://aclweb.org/anthology/P/P17/P17-1036.pdf)
 
-You can always check the original code repo published by the paper author. [(github)](https://github.com/ruidan/Unsupervised-Aspect-Extraction)
+The original model was implemented in Keras with python2. Many of its features are deprecated in python3. You can always check the original code repo published by the paper author. [(github)](https://github.com/ruidan/Unsupervised-Aspect-Extraction)
 
 ## Data
 
@@ -22,7 +22,7 @@ respectively in code/ . The preprocessed files and trained word embeddings for e
 Under code/ and type the following command for training:
 
 ```
-THEANO_FLAGS="device=gpu0,floatX=float32" python train.py \
+python train.py \
 --emb ../preprocessed_data/$domain/w2v_embedding \
 --domain $domain \
 -o output_dir \
@@ -37,7 +37,7 @@ After training, two output files will be saved in code/output*dir/$domain/: 1) \
 Under code/ and type the following command:
 
 ```
-THEANO_FLAGS="device=gpu0,floatX=float32" python evaluation.py \
+python evaluation.py \
 --domain $domain \
 -o output_dir \
 ```
