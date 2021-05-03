@@ -65,31 +65,16 @@ for index, line in tqdm(enumerate(test_x)):
     padding_length = overall_maxlen - len(line)
     test_x[index] = [0] * padding_length + line
 
-train_x = np.asarray(train_x) 
-test_x = np.asarray(test_x)
-
 print(f'Number of training examples: {len(train_x)}')
 print(f'Length of vocab: {len(vocab)}')
 print(f'Padded train set length {len(train_x[0])}')
 print(f'Padded test set length {len(test_x[0])}')
 
-    while True:
-        if batch_count == n_batch:
-            np.random.shuffle(data)
-            batch_count = 0
 
-        batch = data[batch_count*batch_size: (batch_count+1)*batch_size]
-        batch_count += 1
-        yield batch
-
-def negative_batch_generator(data, batch_size, neg_size):
-    data_len = data.shape[0]
-    dim = data.shape[1]
-
-    while True:
-        indices = np.random.choice(data_len, batch_size * neg_size)
-        samples = data[indices].reshape(batch_size, neg_size, dim)
-        yield samples
+def convert_data_to_loader(data, batch_size):
+    dataset = TensorDataset(torch.tensor(data))
+    sampler = RandomSampler(dataset)
+    return dataset, DataLoader(dataset, sampler=sampler, batch_size=batch_size)
 
 ###############################################################################################################################
 ## Building model
@@ -112,7 +97,7 @@ optimizer = AdamW(params=model.parameters() ,lr=0.001, betas=[0.9, 0.999], eps=1
 ## Training
 #
 
-train_dataloader = convert_data_to_loader(train_x, args.batch_size)
+train_set, train_dataloader = convert_data_to_loader(train_x, args.batch_size)
 
 batches_per_epoch = math.ceil(len(train_x)/args.batch_size)
 
@@ -127,12 +112,16 @@ for ii in range(args.epochs):
         optimizer.zero_grad()
 
         cur_batch_size = sen_batch[0].shape[0]
-        indices = np.random.choice(len(train_x), cur_batch_size * args.neg_size)
-        neg = torch.tensor(train_x[indices]).reshape(cur_batch_size, args.neg_size, overall_maxlen)
+        neg_batch_size = cur_batch_size * args.neg_size
+        indices = np.random.choice(len(train_x), neg_batch_size)
+        negset = torch.utils.data.DataLoader(torch.utils.data.Subset(train_set, indices), batch_size=neg_batch_size)
+        neg = next(iter(negset))
+
 
         if torch.cuda.is_available():
             sen_batch = sen_batch[0].cuda()
-            neg = neg.cuda()
+            neg = neg[0].cuda()
+        neg = neg.reshape(cur_batch_size, args.neg_size, overall_maxlen)
 
         output = model(sen_batch, neg)
         output["loss"].backward()
@@ -150,7 +139,6 @@ model.eval()
 test_data = torch.tensor(test_x)
 if torch.cuda.is_available():
     test_data = test_data.cuda()
-print(test_x.shape)
 
 # todo
 

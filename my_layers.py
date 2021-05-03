@@ -18,7 +18,7 @@ class Attention(nn.Module):
         # e [batch_size, maxlen, emb_dim]
         # y [batch_size, emb_dim]
 
-        # Tensor computation        
+        # Tensor computation
         y = torch.mm(self.weights, y.t())        # y [emb_dim, batch_size]
         y = y.t()                           # y [batch_size, emb_dim]
         y = y.unsqueeze(-2).repeat(1, self.steps, 1)      # y [batch_size, maxlen, emb_dim
