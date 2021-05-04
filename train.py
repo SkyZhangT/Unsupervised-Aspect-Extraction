@@ -59,6 +59,21 @@ from tqdm import tqdm
 
 vocab, train_x, test_x, overall_maxlen = dataset.get_data(args.domain, vocab_size=args.vocab_size, maxlen=args.maxlen)
 
+print(f'Padding train data')
+
+train_data = np.zeros((len(train_x), overall_maxlen), dtype=np.long)
+for i, line in tqdm(enumerate(train_x)):
+    padding_length = overall_maxlen - len(line)
+    train_data[i, padding_length:] = line
+
+print(f'Padding test data')
+
+test_data = np.zeros((len(test_x), overall_maxlen), dtype=np.long)
+for i, line in tqdm(enumerate(test_x)):
+    padding_length = overall_maxlen - len(line)
+    test_data[i, padding_length:] = line
+
+
 print(f'Number of training examples: {len(train_x)}')
 print(f'Length of vocab: {len(vocab)}')
 print(f'Padding length of training examples: {overall_maxlen}')
@@ -76,21 +91,13 @@ def sentence_batch_generator(data, batch_size, maxlen):
             batch_count = 0
 
         index_batch = indices[batch_count*batch_size: min((batch_count+1)*batch_size, data_length)]
-        batch = []
-        for i in index_batch:
-            padding_length = maxlen - len(data[i])
-            batch.append([0] * padding_length + data[i])
         batch_count += 1
-        yield torch.tensor(batch)
+        yield torch.LongTensor(data[index_batch])
 
 def get_neg_batch(data, batch_size, neg_size, maxlen):
     while True:
         indices = np.random.choice(len(data), batch_size * neg_size)
-        batch = []
-        for i in indices:
-            padding_length = maxlen - len(data[i])
-            batch.append([0] * padding_length + data[i])
-        return torch.tensor(batch)
+        return torch.LongTensor(data[indices])
 
 ###############################################################################################################################
 ## Building model
@@ -174,7 +181,7 @@ att_out = codecs.open(out_dir + '/att_weights', 'w', 'utf-8')
 print('Saving attention weights on test sentences...')
 for c in range(len(test_x)):
     att_out.write('----------------------------------------\n')
-    att_out.write(str(c) + '\t aspect_probs:' + str(aspect_probs[c]) + '\n')
+    att_out.write(str(c) + '\n')
 
     word_inds = [i for i in test_x[c] if i!=0]
     line_len = len(word_inds)

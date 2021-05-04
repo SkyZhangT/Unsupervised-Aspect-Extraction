@@ -12,6 +12,7 @@ class Model(nn.Module):
         super(Model, self).__init__()
         self.vocab_size = len(vocab)
         self.word_emb = nn.Embedding(self.vocab_size, args.emb_dim)
+        self.ortho_reg = args.ortho_reg
         
         ### do not update weight of word_emb layer
         self.word_emb.weight.requires_grad = False
@@ -32,7 +33,12 @@ class Model(nn.Module):
             self.word_emb.weight = torch.nn.Parameter(emb_reader.get_emb_matrix_given_vocab(vocab, self.word_emb.weight), requires_grad=False)
             logger.info('Initializing aspect embedding matrix as centroid of kmean clusters')
             self.wae.weights = torch.nn.Parameter(emb_reader.get_aspect_matrix(args.aspect_size).cuda())
-        
+    
+    def calc_ortho_reg(self, weight_matrix):
+        ### orthogonal regularization for aspect embedding matrix ###
+        w_n = weight_matrix / (1e-8 + torch.sqrt(torch.sum(torch.square(weight_matrix), dim=-1, keepdims=True)))
+        reg = torch.sum(torch.square(torch.mm(w_n, w_n.t()) - torch.eye(w_n.shape[0]).cuda()))
+        return self.ortho_reg*reg
                                                                     
     def forward(self, sentence_input, neg_input):
         if neg_input == None and self.training==True:
@@ -58,7 +64,9 @@ class Model(nn.Module):
         r_s = self.wae(p_t)                             # r_s [batch_size, aspect_size]
         loss = self.mmLoss(z_s, z_n, r_s)               # loss [batch_size]
 
-        output= {"max_margin": loss, "loss": torch.mean(loss)}
+        reg = self.calc_ortho_reg(self.wae.weights)
+
+        output= {"max_margin": loss, "loss": torch.mean(loss) + reg}
 
         return output
     
