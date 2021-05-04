@@ -11,6 +11,7 @@ from model import Model
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
 import torch
 import math
+import random
 
 logging.basicConfig(
                     #filename='out.log',
@@ -57,24 +58,39 @@ import reader as dataset
 from tqdm import tqdm
 
 vocab, train_x, test_x, overall_maxlen = dataset.get_data(args.domain, vocab_size=args.vocab_size, maxlen=args.maxlen)
-for index, line in tqdm(enumerate(train_x)):
-    padding_length = overall_maxlen - len(line)
-    train_x[index] = [0] * padding_length + line
-
-for index, line in tqdm(enumerate(test_x)):
-    padding_length = overall_maxlen - len(line)
-    test_x[index] = [0] * padding_length + line
 
 print(f'Number of training examples: {len(train_x)}')
 print(f'Length of vocab: {len(vocab)}')
-print(f'Padded train set length {len(train_x[0])}')
-print(f'Padded test set length {len(test_x[0])}')
+print(f'Padding length of training examples: {overall_maxlen}')
 
+def sentence_batch_generator(data, batch_size, maxlen):
+    data_length = len(data)
+    indices = list(range(data_length))
+    n_batch = data_length / batch_size
+    batch_count = 0
+    random.shuffle(indices)
 
-def convert_data_to_loader(data, batch_size):
-    dataset = TensorDataset(torch.tensor(data))
-    sampler = RandomSampler(dataset)
-    return dataset, DataLoader(dataset, sampler=sampler, batch_size=batch_size)
+    while True:
+        if batch_count >= n_batch:
+            random.shuffle(indices)
+            batch_count = 0
+
+        index_batch = indices[batch_count*batch_size: min((batch_count+1)*batch_size, data_length)]
+        batch = []
+        for i in index_batch:
+            padding_length = maxlen - len(data[i])
+            batch.append([0] * padding_length + data[i])
+        batch_count += 1
+        yield torch.tensor(batch)
+
+def get_neg_batch(data, batch_size, neg_size, maxlen):
+    while True:
+        indices = np.random.choice(len(data), batch_size * neg_size)
+        batch = []
+        for i in indices:
+            padding_length = maxlen - len(data[i])
+            batch.append([0] * padding_length + data[i])
+        return torch.tensor(batch)
 
 ###############################################################################################################################
 ## Building model
@@ -86,57 +102,54 @@ if torch.cuda.is_available():
 ###############################################################################################################################
 ## Optimizaer algorithm
 #
-no_decay = ['bias', 'LayerNorm.weight']
-optimizer_grouped_parameters = [
-    {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)],
-        'weight_decay': 0.0}
-]
-optimizer = AdamW(params=model.parameters() ,lr=0.001, betas=[0.9, 0.999], eps=1e-08)
+params = [ param for param in model.parameters() if param.requires_grad == True]
+optimizer = AdamW(params=params ,lr=0.001, betas=[0.9, 0.999], eps=1e-08)
 
 ###############################################################################################################################
 ## Training
 #
-
-train_set, train_dataloader = convert_data_to_loader(train_x, args.batch_size)
+sen_gen = sentence_batch_generator(train_x, args.batch_size, overall_maxlen)
 
 batches_per_epoch = math.ceil(len(train_x)/args.batch_size)
 
 min_loss = float('inf')
+print(f"Start training the model.")
 model.train()
 torch.autograd.set_detect_anomaly(True)
 for ii in range(args.epochs):
     t0 = time()
     loss, max_margin_loss = 0., 0.
 
-    for step, sen_batch in enumerate(train_dataloader):
+    for i in tqdm(range(batches_per_epoch)):
+        sen_batch = next(sen_gen)
+        
         optimizer.zero_grad()
 
-        cur_batch_size = sen_batch[0].shape[0]
-        neg_batch_size = cur_batch_size * args.neg_size
-        indices = np.random.choice(len(train_x), neg_batch_size)
-        negset = torch.utils.data.DataLoader(torch.utils.data.Subset(train_set, indices), batch_size=neg_batch_size)
-        neg = next(iter(negset))
-
-
+        neg_batch = get_neg_batch(train_x, sen_batch.shape[0], args.neg_size, overall_maxlen)
         if torch.cuda.is_available():
-            sen_batch = sen_batch[0].cuda()
-            neg = neg[0].cuda()
-        neg = neg.reshape(cur_batch_size, args.neg_size, overall_maxlen)
+            sen_batch = sen_batch.cuda()
+            neg_batch = neg_batch.cuda()
+        neg_batch = neg_batch.reshape(sen_batch.shape[0], args.neg_size, overall_maxlen)
 
-        output = model(sen_batch, neg)
+        output = model(sen_batch, neg_batch)
         output["loss"].backward()
         optimizer.step()
 
         loss += output["loss"] / batches_per_epoch
 
-    print(loss.data)
+    
+    print(f"Epoch {ii} finished, loss={loss.data}.")
     if loss < min_loss:
         torch.save(model.state_dict(), out_dir+'/aspect.log')
 
 ################ Evaluation ####################################
 model.eval()
 
-test_data = torch.tensor(test_x)
+test_data = []
+for line in test_x:
+    padding_length = overall_maxlen - len(line)
+    test_data.append([0] * padding_length + line)
+test_data = torch.tensor(test_data)
 if torch.cuda.is_available():
     test_data = test_data.cuda()
 

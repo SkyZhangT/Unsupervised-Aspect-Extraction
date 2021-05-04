@@ -12,6 +12,10 @@ class Model(nn.Module):
         super(Model, self).__init__()
         self.vocab_size = len(vocab)
         self.word_emb = nn.Embedding(self.vocab_size, args.emb_dim)
+        
+        ### do not update weight of word_emb layer
+        self.word_emb.weight.requires_grad = False
+
         self.activation = nn.Softmax(dim=1)
         self.dense = nn.Linear(args.emb_dim, args.aspect_size)
         self.avg = Average()
@@ -25,7 +29,7 @@ class Model(nn.Module):
             from w2vEmbReader import W2VEmbReader as EmbReader
             emb_reader = EmbReader(args.emb_path, emb_dim=args.emb_dim)
             logger.info('Initializing word embedding matrix')
-            self.word_emb.weight = torch.nn.Parameter(emb_reader.get_emb_matrix_given_vocab(vocab, self.word_emb.weight))
+            self.word_emb.weight = torch.nn.Parameter(emb_reader.get_emb_matrix_given_vocab(vocab, self.word_emb.weight), requires_grad=False)
             logger.info('Initializing aspect embedding matrix as centroid of kmean clusters')
             self.wae.weights = torch.nn.Parameter(emb_reader.get_aspect_matrix(args.aspect_size).cuda())
         

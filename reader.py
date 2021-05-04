@@ -32,7 +32,7 @@ def create_vocab(domain, maxlen=0, vocab_size=0):
                 total_words += 1
                 
         # for debug purpose, delete when use
-        if i > 500:
+        if i > 500000:
             break
 
     print ('   %i total words, %i unique words' % (total_words, unique_words))
@@ -92,7 +92,7 @@ def read_dataset(domain, phase, vocab, maxlen):
             maxlen_x = len(indices)
 
         # for debug purpose, delete when use
-        if i > 500:
+        if i > 500000:
             break
 
     print('   <num> hit rate: %.2f%%, <unk> hit rate: %.2f%%' % (100*num_hit/total, 100*unk_hit/total))
